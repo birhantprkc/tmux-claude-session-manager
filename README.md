@@ -69,11 +69,11 @@ run-shell ~/clone/path/claude_session_manager.tmux
 
 Inside the picker:
 
-| Key                       | Action                                                          |
-| ------------------------- | --------------------------------------------------------------- |
-| `enter`                   | Jump to the agent (see [How it works](#how-it-works))           |
-| `ctrl-x`                  | Kill the highlighted agent                                      |
-| `↑` / `↓`, type to filter | fzf navigation                                                  |
+| Key                       | Action                                                |
+| ------------------------- | ----------------------------------------------------- |
+| `enter`                   | Jump to the agent (see [How it works](#how-it-works)) |
+| `ctrl-x`                  | Kill the highlighted agent                            |
+| `↑` / `↓`, type to filter | fzf navigation                                        |
 
 Agents needing your attention (`waiting`, `idle`) sort to the top.
 
@@ -102,12 +102,40 @@ For example, to skip permission prompts in launched sessions:
 set -g @claude_args '--dangerously-skip-permissions'
 ```
 
-`@claude_fzf_options` is passed straight to `fzf`, so you can add your own
-bindings — for instance, vim-style navigation in the picker:
+### Customizing the fzf picker
+
+`@claude_fzf_options` is passed straight to `fzf`, so you can add your own bindings.
+
+Here is a vim keybinding example:
 
 ```tmux
-set -g @claude_fzf_options '--bind j:down --bind k:up'
+set -g @claude_fzf_options "\
+  --prompt 'nav> ' \
+  --bind 'j:down' \
+  --bind 'k:up' \
+  --bind 'q:abort' \
+  --bind 'x:execute-silent(kill {3})+reload(sleep 0.3; \$CLAUDE_PICKER --list)' \
+  --bind 'i:unbind(j,k,q,i,a,x)+change-prompt(filter> )' \
+  --bind 'a:unbind(j,k,q,i,a,x)+change-prompt(filter> )' \
+  --bind 'esc:rebind(j,k,q,i,a,x)+change-prompt(nav> )'"
 ```
+
+The picker opens in **nav** mode:
+
+| Key       | Action                                                  |
+| --------- | ------------------------------------------------------- |
+| `j` / `k` | move down / up                                          |
+| `i` / `a` | switch to **filter** mode — type to fuzzy-match         |
+| `x`       | kill the highlighted agent (like the built-in `ctrl-x`) |
+| `q`       | close the picker                                        |
+| `enter`   | jump to the agent (both modes)                          |
+| `esc`     | filter mode → back to nav                               |
+
+Only the bound keys are special in nav mode; any other key still filters as you
+type. `x` reloads the list through `$CLAUDE_PICKER`, a path the picker exports for
+exactly this — write it as `\$CLAUDE_PICKER` inside the double-quoted value above
+so tmux stores a literal `$` (in a single-quoted value, use a bare
+`$CLAUDE_PICKER`).
 
 ## How it works
 

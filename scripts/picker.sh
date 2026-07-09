@@ -25,6 +25,7 @@ done
 
 self="$DIR/picker.sh"
 export FZF_DEFAULT_OPTS=''
+export CLAUDE_PICKER="$self"
 
 # Arbitrary user fzf options (e.g. custom --bind or --preview-window)
 extra_opts=()
