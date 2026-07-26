@@ -27,7 +27,8 @@ session_hash() {
   else
     out="$(printf '%s\n' "$1" | shasum)"
   fi
-  printf '%s' "${out%% *}" | cut -c1-8
+  out="${out%% *}"
+  printf '%s' "${out:0:8}"
 }
 
 # file_mtime <path>

@@ -23,10 +23,15 @@ if [[ "$(tmux display-message -p '#S')" == "$prefix"* ]]; then
   exit 0
 fi
 
-tmux has-session -t "$session" 2>/dev/null ||
+if ! tmux has-session -t "$session" 2>/dev/null; then
+  [ -d "$path" ] || {
+    tmux display-message "tmux-claude-session-manager: $path no longer exists"
+    exit 0
+  }
   tmux new-session -d -s "$session" -c "$path" "$cmd"
+fi
 
 # Record which window launched it, so the picker can jump back here later.
 [ -n "$window" ] && tmux set-option -t "$session" @claude_origin "$window"
 
-tmux display-popup -w "$w" -h "$h" -E "tmux attach-session -t $session"
+tmux display-popup -w "$w" -h "$h" -E "tmux attach-session -t '$session'"
