@@ -24,8 +24,6 @@ if [[ "$(tmux display-message -p '#S')" == "$prefix"* ]]; then
 fi
 
 if ! tmux has-session -t "$session" 2>/dev/null; then
-  # Only guard the create path: an existing session stays attachable even if the
-  # directory it was launched from has since been renamed or removed.
   [ -d "$path" ] || {
     tmux display-message "tmux-claude-session-manager: $path no longer exists"
     exit 0
@@ -36,7 +34,4 @@ fi
 # Record which window launched it, so the picker can jump back here later.
 [ -n "$window" ] && tmux set-option -t "$session" @claude_origin "$window"
 
-# -E takes a command string that a second shell re-parses, so the session name is
-# quoted for that shell too — @claude_session_prefix is user-set and may contain
-# spaces or shell metacharacters.
 tmux display-popup -w "$w" -h "$h" -E "tmux attach-session -t '$session'"
