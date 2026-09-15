@@ -18,13 +18,15 @@ me="${1:-}"
 my_session="$(tmux list-clients -F '#{client_name} #{session_name}' 2>/dev/null |
   awk -v me="$me" '$1 == me { print $2; exit }')"
 
+title=" Sessions "
+
 # open_picker <host>  — show the picker popup on <host>, or on the default client
 # when <host> is empty. Returns display-popup's own exit status.
 open_picker() {
   if [ -n "$1" ]; then
-    tmux display-popup -c "$1" -w "$w" -h "$h" -E "$DIR/picker.sh"
+    tmux display-popup -b rounded -T "$title" -c "$1" -w "$w" -h "$h" -E "$DIR/picker.sh"
   else
-    tmux display-popup -w "$w" -h "$h" -E "$DIR/picker.sh"
+    tmux display-popup -b rounded -T "$title" -w "$w" -h "$h" -E "$DIR/picker.sh"
   fi
 }
 

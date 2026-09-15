@@ -34,4 +34,5 @@ fi
 # Record which window launched it, so the picker can jump back here later.
 [ -n "$window" ] && tmux set-option -t "$session" @claude_origin "$window"
 
-tmux display-popup -w "$w" -h "$h" -E "tmux attach-session -t '$session'"
+title=" Agent "
+tmux display-popup -w "$w" -h "$h" -b rounded -T "$title" -E "tmux attach-session -t '$session'"
