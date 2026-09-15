@@ -7,8 +7,9 @@ session in a popup for each project directory. Open the hatch, hand Claude the
 work, close it and get back to your editor. Each session lives in its own nested
 tmux session, so closing the hatch never interrupts it. When you want to check
 in, an `fzf` picker lists every running session, shows what each one is doing,
-and jumps you straight to it.
-The parent tmux window gets highlighted via a bell when a session finished or needs your attension, so you can quickly know which window to switch to without opening the picker.
+and jumps you straight to it. And when a session finishes or needs your
+attention, it rings a bell that highlights the window you launched it from — so
+you know where to go without even opening the picker.
 
 Simple by design: it's just a few shell scripts.
 
