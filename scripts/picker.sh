@@ -27,7 +27,7 @@ fi
 
 for tool in fzf jq claude; do
   command -v "$tool" >/dev/null 2>&1 || {
-    tmux display-message "tmux-claude-session-manager: $tool is required for the picker"
+    tmux display-message "tmux-claude-hatch: $tool is required for the picker"
     exit 0
   }
 done

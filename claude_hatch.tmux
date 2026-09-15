@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# tmux-claude-session-manager
+# tmux-claude-hatch
 #
 # List, monitor status, and jump across nested Claude Code sessions from a
 # single popup. tpm runs this file as an executable on tmux startup; it reads
