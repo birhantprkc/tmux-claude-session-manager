@@ -17,7 +17,7 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
 . "$DIR/helpers.sh"
 
-agents="$(claude agents --json 2>/dev/null)" || exit 0
+agents="$($(get_tmux_option @claude_command 'claude') agents --json 2>/dev/null)" || exit 0
 rows="$(printf '%s' "$agents" |
   jq -r '.[] | select(.kind == "interactive") | [.pid, .status, .sessionId, .cwd] | @tsv' 2>/dev/null)"
 [ -n "$rows" ] || exit 0

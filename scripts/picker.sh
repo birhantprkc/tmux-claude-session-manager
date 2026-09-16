@@ -25,7 +25,7 @@ if [ "${1:-}" = '--list' ]; then
   exit 0
 fi
 
-for tool in fzf jq claude; do
+for tool in fzf jq "$(get_tmux_option @claude_command 'claude')"; do
   command -v "$tool" >/dev/null 2>&1 || {
     tmux display-message "tmux-claude-hatch: $tool is required for the picker"
     exit 0
