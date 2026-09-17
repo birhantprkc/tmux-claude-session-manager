@@ -39,6 +39,8 @@ Simple by design: it's just a few shell scripts.
 - **A launcher** (`prefix` + `y`) that opens/attaches a Claude session for the
   current directory.
 - **Quick kill** (`ctrl-x`) of a finished agent from the picker.
+- **Copy location** (`ctrl-y`) — puts an agent's `session:window.pane` target
+  on the clipboard, ready for `tmux send-keys -t` and friends.
 - **Bell forwarding** — a bell in a dedicated session highlights the window
   you launched it from, so you notice even without opening the picker
   ([one-time Claude Code setup](#making-claude-ring-the-bell)).
@@ -103,11 +105,12 @@ it registers.
 
 Inside the picker:
 
-| Key                       | Action                     |
-| ------------------------- | -------------------------- |
-| `enter`                   | Jump to the agent          |
-| `ctrl-x`                  | Kill the highlighted agent |
-| `↑` / `↓`, type to filter | fzf navigation             |
+| Key                       | Action                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `enter`                   | Jump to the agent                                                            |
+| `ctrl-x`                  | Kill the highlighted agent                                                   |
+| `ctrl-y`                  | Copy the highlighted agent's location (e.g. `claude-88074b0e:0.0`) and close |
+| `↑` / `↓`, type to filter | fzf navigation                                                               |
 
 Agents needing your attention (`waiting`, `idle`) sort to the top.
 

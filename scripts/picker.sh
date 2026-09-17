@@ -4,6 +4,8 @@
 #   picker.sh           fzf picker; on enter, jumps to the chosen agent.
 #   picker.sh --list    print the rows and refresh the cache (used by fzf's
 #                       async initial load and by the ctrl-x reload).
+#   picker.sh --copy <text>
+#                       copy <text> to the clipboard (used by ctrl-y).
 #
 # Rows come from agents.sh, which pairs each running Claude with the tmux pane it
 # occupies. Two kinds of row jump differently:
@@ -22,6 +24,12 @@ if [ "${1:-}" = '--list' ]; then
   "$DIR/agents.sh" >"$tmp" 2>/dev/null
   mv -f "$tmp" "$cache" 2>/dev/null || rm -f "$tmp"
   cat "$cache" 2>/dev/null
+  exit 0
+fi
+
+if [ "${1:-}" = '--copy' ]; then
+  copy_to_clipboard "${2:-}" &&
+    tmux display-message "tmux-claude-hatch: copied ${2:-}"
   exit 0
 fi
 
@@ -55,10 +63,13 @@ fzf --track --version >/dev/null 2>&1 && sync_opts+=(--track)
 # ctrl-x kills the Claude process itself: a dedicated session dies with its last
 # window, while a loose pane keeps the shell that hosted it. The reload waits a
 # beat so the supervisor has dropped the agent from `claude agents --json`.
+# ctrl-y copies the agent's location (session:window.pane, e.g. claude-88074b0e:0.0)
+# and closes the picker.
 sel=$("${list_cmd[@]}" | fzf --ansi --delimiter='\t' --with-nth=5,6,7,8 \
-  --reverse --cycle --header='Claude agents · enter: jump · ctrl-x: kill' \
+  --reverse --cycle --header='Claude agents · enter: jump · ctrl-x: kill · ctrl-y: copy' \
   --preview='tmux capture-pane -ept {2}' --preview-window='up,70%,follow' \
   --bind="ctrl-x:execute-silent(kill {3})+reload(sleep 0.3; $self --list)" \
+  --bind="ctrl-y:execute-silent($self --copy {7})+abort" \
   ${sync_opts[@]+"${sync_opts[@]}"} \
   ${extra_opts[@]+"${extra_opts[@]}"})
 
