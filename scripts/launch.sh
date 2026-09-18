@@ -31,6 +31,9 @@ if ! tmux has-session -t "$session" 2>/dev/null; then
   tmux new-session -d -s "$session" -c "$path" "$cmd"
 fi
 
+# Close the popup when Claude exits, even under a global detach-on-destroy off.
+tmux set-option -t "$session" detach-on-destroy on
+
 # Record which window launched it, so the picker can jump back here later.
 [ -n "$window" ] && tmux set-option -t "$session" @claude_origin "$window"
 
