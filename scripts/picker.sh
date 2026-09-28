@@ -6,6 +6,9 @@
 #                       async initial load and by the ctrl-x reload).
 #   picker.sh --copy <text>
 #                       copy <text> to the clipboard (used by ctrl-y).
+#   picker.sh --preview <pane>
+#                       capture <pane> without its trailing blank lines, which
+#                       would otherwise leave fzf's `follow` scrolled onto padding.
 #
 # Rows come from agents.sh, which pairs each running Claude with the tmux pane it
 # occupies. Two kinds of row jump differently:
@@ -24,6 +27,17 @@ if [ "${1:-}" = '--list' ]; then
   "$DIR/agents.sh" >"$tmp" 2>/dev/null
   mv -f "$tmp" "$cache" 2>/dev/null || rm -f "$tmp"
   cat "$cache" 2>/dev/null
+  exit 0
+fi
+
+if [ "${1:-}" = '--preview' ]; then
+  # A line holding only escape codes (from -e) is still blank.
+  tmux capture-pane -ept "${2:-}" 2>/dev/null |
+    awk -v esc="$(printf '\033')" '
+      { line = $0; gsub(esc "\\[[0-9;]*m", "", line) }
+      line ~ /^[[:space:]]*$/ { held = held $0 "\n"; next }
+      { printf "%s", held; held = ""; print }
+    '
   exit 0
 fi
 
@@ -69,7 +83,7 @@ fi
 # and closes the picker.
 sel=$("${list_cmd[@]}" | fzf --ansi --delimiter='\t' --with-nth=5,6,7,8 \
   --reverse --cycle --header='Claude agents · enter: jump · ctrl-x: kill · ctrl-y: copy' \
-  --preview='tmux capture-pane -ept {2}' --preview-window='up,70%,follow' \
+  --preview="$self --preview {2}" --preview-window='up,70%,follow' \
   --bind="ctrl-x:execute-silent(kill {3})+reload(sleep 0.3; $self --list)" \
   --bind="ctrl-y:execute-silent($self --copy {7})+abort" \
   --bind='change:first' \
