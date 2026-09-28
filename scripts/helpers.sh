@@ -39,9 +39,10 @@ file_mtime() {
 }
 
 # claude_transcript_mtime <session-id>
-# Epoch seconds of the last write to that Claude session's transcript — i.e. when
-# the agent last did anything. `claude agents --json` reports only `startedAt`,
-# never a last-activity time, so the transcript's mtime stands in for it.
+# Epoch seconds of the last write to that Claude session's transcript. Only the
+# CLI fallback in agents.sh needs it: `claude agents --json` reports `startedAt`
+# but never a last-activity time, so the transcript's mtime stands in for it. A
+# rough stand-in — Claude Code also touches the transcripts of idle sessions.
 #
 # Found by glob so we never have to reproduce Claude's cwd -> project-slug
 # encoding. The path is an internal Claude Code detail and may move; an empty
