@@ -61,7 +61,6 @@ if [ "$(get_tmux_option @claude_picker_cache 'on')" = on ] &&
   list_cmd=(cat "$cache")
   sync_opts=(--bind "load:unbind(load)+reload-sync($self --list)")
 fi
-fzf --track --version >/dev/null 2>&1 && sync_opts+=(--track)
 
 # ctrl-x kills the Claude process itself: a dedicated session dies with its last
 # window, while a loose pane keeps the shell that hosted it. The reload waits a
@@ -73,6 +72,7 @@ sel=$("${list_cmd[@]}" | fzf --ansi --delimiter='\t' --with-nth=5,6,7,8 \
   --preview='tmux capture-pane -ept {2}' --preview-window='up,70%,follow' \
   --bind="ctrl-x:execute-silent(kill {3})+reload(sleep 0.3; $self --list)" \
   --bind="ctrl-y:execute-silent($self --copy {7})+abort" \
+  --bind='change:first' \
   ${sync_opts[@]+"${sync_opts[@]}"} \
   ${extra_opts[@]+"${extra_opts[@]}"})
 
