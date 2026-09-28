@@ -97,7 +97,8 @@ render() {
       else if ($3 == "busy")    { icon = "\033[31m●\033[0m working"; rank = 3 }  # red    - busy, leave it
       else                      { icon = "\033[90m●\033[0m   ?    "; rank = 2 }  # grey   - unrecognised status
 
-      mins = ($6 != "") ? int((now - $6) / 60) : 0
+      secs = ($6 != "") ? now - $6 : 1e12   # unknown activity sorts last
+      mins = int(secs / 60)
       if      ($6 == "")    age = "-"
       else if (mins < 60)   age = mins "m"
       else if (mins < 2880) age = int(mins / 60) "h"
@@ -107,15 +108,22 @@ render() {
       path = $5
       if (index(path, home) == 1) path = "~" substr(path, length(home) + 1)
 
-      printf "%s\t%s\t%s\t%s\t%s\t%s\t%5s\t%s\t%s\n",
-        mins, rank, pane[tty], $2, kind, icon, age, loc[tty], path
+      printf "%d\t%s\t%s\t%s\t%s\t%s\t%5s\t%s\t%s\n",
+        secs, rank, pane[tty], $2, kind, icon, age, loc[tty], path
     }
     END { exit (bad || !live) }
-  ' | sort -t$'\t' -k2,2n -k1,1n | cut -f2-
-  # rank asc (what needs you floats up), then age asc so whatever just went idle
-  # sits at the top of its group. The age column mixes units ("5m", "3h", "2d"),
-  # so the sort runs on a leading minutes column, cut off once it has served.
+  ' | sort -t$'\t' $sort_keys | cut -f2-
+  # The age column mixes units ("5m", "3h", "2d"), so the sort runs on a leading
+  # seconds column, cut off once it has served.
 }
+
+# status: rank asc (what needs you floats up), then age asc so whatever just went
+# idle sits at the top of its group. recent: age asc alone.
+if [ "$(get_tmux_option @claude_sort 'status')" = recent ]; then
+  sort_keys='-k1,1n'
+else
+  sort_keys='-k2,2n -k1,1n'
+fi
 
 { recs="$(session_recs)" && out="$(render "$recs" 1)"; } ||
   { recs="$(cli_recs)" && out="$(render "$recs" '')"; } || exit 0

@@ -114,7 +114,8 @@ Inside the picker:
 | `ctrl-y`                  | Copy the highlighted agent's location (e.g. `claude-88074b0e:0.0`) and close |
 | `↑` / `↓`, type to filter | fzf navigation                                                               |
 
-Agents needing your attention (`waiting`, `idle`) sort to the top.
+Agents needing your attention (`waiting`, `idle`) sort to the top. Set
+`@claude_sort 'recent'` to sort by last activity instead, regardless of status.
 
 Every running Claude gets its own row — the picker identifies each by its
 process, not by its tmux session. So several agents in one project all show up
@@ -134,6 +135,7 @@ set -g @claude_popup_width     '90%'     # popup width
 set -g @claude_popup_height    '90%'     # popup height
 set -g @claude_fzf_options    ''         # extra options passed to the fzf picker
 set -g @claude_picker_cache   'on'       # paint the picker's first frame from a cache
+set -g @claude_sort           'status'   # picker order: 'status' or 'recent'
 set -g @claude_forward_bell   'on'       # highlight the origin window on a bell
 ```
 
