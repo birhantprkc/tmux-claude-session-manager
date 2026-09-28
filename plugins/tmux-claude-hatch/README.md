@@ -12,9 +12,9 @@ It does two things:
   tmux only raises an alert for a real `\a` written to a pane's pty, which is what
   makes window-status alerts and this plugin's bell forwarding fire.
 - **Refreshes the picker's agent cache** on those same events, plus session
-  start/end and prompt submit. The picker paints from cache for a fast startup,
-  so without this the first frame can be stale — showing `working` for an agent
-  that has been waiting on you.
+  start/end and prompt submit. The picker paints its first frame from that cache
+  (unless `@claude_picker_cache` is `'off'`), so without this it can be stale —
+  showing `working` for an agent that has been waiting on you.
 
 ## Install
 

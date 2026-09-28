@@ -49,12 +49,15 @@ extra_opts=()
 fzf_options="$(get_tmux_option @claude_fzf_options '')"
 [ -n "$fzf_options" ] && eval "extra_opts=($fzf_options)"
 
-# Load the session list asynchronously
+# Load the session list asynchronously. Painting the first frame from the cache
+# can be turned off with @claude_picker_cache, since a cached frame can show a
+# stale status.
 list_cmd=("$self" --list)
 sync_opts=()
 now=$(date +%s)
 mtime=$(file_mtime "$cache")
-if [ -s "$cache" ] && [ -n "$mtime" ] && [ $((now - mtime)) -lt 3600 ]; then
+if [ "$(get_tmux_option @claude_picker_cache 'on')" = on ] &&
+  [ -s "$cache" ] && [ -n "$mtime" ] && [ $((now - mtime)) -lt 3600 ]; then
   list_cmd=(cat "$cache")
   sync_opts=(--bind "load:unbind(load)+reload-sync($self --list)")
 fi
@@ -62,7 +65,7 @@ fzf --track --version >/dev/null 2>&1 && sync_opts+=(--track)
 
 # ctrl-x kills the Claude process itself: a dedicated session dies with its last
 # window, while a loose pane keeps the shell that hosted it. The reload waits a
-# beat so the supervisor has dropped the agent from `claude agents --json`.
+# beat so the process is gone by the time agents.sh looks for it.
 # ctrl-y copies the agent's location (session:window.pane, e.g. claude-88074b0e:0.0)
 # and closes the picker.
 sel=$("${list_cmd[@]}" | fzf --ansi --delimiter='\t' --with-nth=5,6,7,8 \

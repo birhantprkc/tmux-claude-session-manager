@@ -32,7 +32,8 @@ Simple by design: it's just a few shell scripts.
 - **A central picker** (`prefix` + `u`) listing every running Claude agent —
   several in one project, and any running loose in an ordinary pane.
 - **Live status** per agent — `working` / `waiting` / `idle` — read straight
-  from `claude agents --json`, so you instantly see which need you. No setup.
+  from the session files Claude Code keeps, so you instantly see which need you.
+  No setup.
 - **A live preview** of each agent's screen right in the picker.
 - **Smart jump** — selecting an agent switches your client to the window it
   was launched from, then resumes it in a popup over it.
@@ -50,9 +51,10 @@ Simple by design: it's just a few shell scripts.
 
 - **tmux ≥ 3.2** (for `display-popup`)
 - **[fzf](https://github.com/junegunn/fzf)** — the picker UI
-- **[jq](https://jqlang.org/)** — parses `claude agents --json`
+- **[jq](https://jqlang.org/)** — parses Claude Code's session files
 - **[Claude Code](https://claude.com/claude-code)** ≥ 2.1.139 — for the
-  `claude agents` command (`claude --version` to check)
+  `claude agents` command, the fallback when the session files can't be read
+  (`claude --version` to check)
 - bash; macOS or Linux
 
 ## Installation
@@ -83,9 +85,9 @@ configuration this plugin wants, so you don't have to hand-edit
   is what [bell forwarding](#making-claude-ring-the-bell) needs in order to
   highlight the window you launched the agent from.
 - **Refreshes the picker's agent cache** on those same events, plus session
-  start/end and prompt submit. The picker paints from cache for a fast startup,
-  so without this the first frame can be stale — showing `working` for an agent
-  that has been waiting on you.
+  start/end and prompt submit. The picker paints its first frame from that cache
+  (unless `@claude_picker_cache` is `'off'`), so without this it can be stale —
+  showing `working` for an agent that has been waiting on you.
 
 ```
 /plugin marketplace add craftzdog/tmux-claude-hatch
@@ -131,6 +133,7 @@ set -g @claude_session_prefix 'claude-'  # tmux session name prefix
 set -g @claude_popup_width     '90%'     # popup width
 set -g @claude_popup_height    '90%'     # popup height
 set -g @claude_fzf_options    ''         # extra options passed to the fzf picker
+set -g @claude_picker_cache   'on'       # paint the picker's first frame from a cache
 set -g @claude_forward_bell   'on'       # highlight the origin window on a bell
 ```
 

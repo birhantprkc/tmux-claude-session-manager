@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Emit one picker row per running Claude that lives in a tmux pane.
 #
-# Claude self-reports its status: each session writes its own state to disk and a
-# supervisor daemon aggregates it, which `claude agents --json` publishes. So this
-# needs no Claude Code hooks, and no `pane_current_command` scan — on macOS a pane
-# reports its parent shell there, never the `claude` child running inside it.
+# Claude self-reports its status: each session writes its own state to disk. We
+# read those files, falling back to `claude agents --json`. So this needs no
+# Claude Code hooks, and no `pane_current_command` scan — on macOS a pane reports
+# its parent shell there, never the `claude` child running inside it.
 #
 # Identity is the Claude process, not the tmux session. Joining pid -> tty -> pane
 # is what lets several Claudes in one project (same cwd, same session, different
@@ -17,47 +17,107 @@ DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=helpers.sh
 . "$DIR/helpers.sh"
 
-agents="$($(get_tmux_option @claude_command 'claude') agents --json 2>/dev/null)" || exit 0
-rows="$(printf '%s' "$agents" |
-  jq -r '.[] | select(.kind == "interactive") | [.pid, .status, .sessionId, .cwd] | @tsv' 2>/dev/null)"
-[ -n "$rows" ] || exit 0
+# session_recs
+# `procStart` lets render() tell a live agent from a stale file; `statusUpdatedAt`
+# feeds the age column. The files are an internal Claude Code detail, so a missing
+# directory or a file caught mid-write fails this, and the caller asks the CLI.
+#
+#   Rec: pid \t status \t session-id \t cwd \t seen-at \t proc-start
+session_recs() {
+  local files
+  files=("${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/sessions/*.json)
+  [ -f "${files[0]}" ] || return 1
+  jq -r 'select(.kind == "interactive")
+    | ((.statusUpdatedAt // .updatedAt) as $t | if $t then ($t / 1000 | floor) else "" end) as $seen
+    | [.pid, .status, .sessionId, .cwd, $seen, .procStart] | @tsv' "${files[@]}" 2>/dev/null
+}
 
-# Resolved out here because only `stat`, outside awk, can read an mtime.
-mtimes="$(printf '%s\n' "$rows" | cut -f3 | while IFS= read -r sid; do
-  printf 'M\t%s\t%s\n' "$sid" "$(claude_transcript_mtime "$sid")"
-done)"
+# cli_recs
+# Fallback when the session files can't be read. It has already dropped dead
+# agents, so proc-start stays empty. It reports no last-activity time either; the
+# transcript's mtime stands in for it.
+cli_recs() {
+  $(get_tmux_option @claude_command 'claude') agents --json 2>/dev/null |
+    jq -r '.[] | select(.kind == "interactive") | [.pid, .status, .sessionId, .cwd] | @tsv' 2>/dev/null |
+    while IFS=$'\t' read -r pid status sid cwd; do
+      printf '%s\t%s\t%s\t%s\t%s\t\n' "$pid" "$status" "$sid" "$cwd" "$(claude_transcript_mtime "$sid")"
+    done
+}
 
-# Three tagged streams into one awk: pid->tty, tty->pane, session->last-activity.
-# Total cost is 3 subprocesses regardless of how many sessions or panes exist.
-{
-  ps -Ao pid=,tty= 2>/dev/null | awk '{ print "P\t" $1 "\t" $2 }'
-  tmux list-panes -a -F $'T\t#{pane_tty}\t#{pane_id}\t#{session_name}\t#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null
-  printf '%s\n' "$mtimes"
-  printf '%s\n' "$rows" | sed $'s/^/A\t/'
-} | awk -F'\t' -v now="$(date +%s)" -v home="$HOME" \
-  -v prefix="$(get_tmux_option @claude_session_prefix 'claude-')" '
-  $1 == "P" { tty_of[$2] = $3; next }
-  $1 == "T" { sub(/^\/dev\//, "", $2); pane[$2] = $3; sess[$2] = $4; loc[$2] = $5; next }
-  $1 == "M" { seen_at[$2] = $3; next }
-  $1 == "A" {
-    tty = tty_of[$2]
-    if (tty == "" || !(tty in pane)) next   # this Claude is not running inside tmux
+# proc_starts <recs>
+# Linux only: Claude records field 22 of /proc/<pid>/stat as proc-start there.
+# Strip greedily past ") " first — field 2 is the parenthesised command name and
+# may itself contain ") " — which leaves field 22 as the 20th of what remains.
+proc_starts() {
+  printf '%s\n' "$1" | cut -f1 | while IFS= read -r pid; do
+    IFS= read -r stat 2>/dev/null <"/proc/$pid/stat" || continue
+    # shellcheck disable=SC2086 # deliberate split into positional parameters
+    set -- ${stat##*) }
+    [ $# -ge 20 ] && printf 'S\t%s\t%s\n' "$pid" "${20}"
+  done
+}
 
-    if      ($3 == "waiting") { icon = "\033[33m●\033[0m waiting"; rank = 0 }  # yellow - needs input
-    else if ($3 == "idle")    { icon = "\033[32m●\033[0m idle   "; rank = 1 }  # green  - done, your turn
-    else if ($3 == "busy")    { icon = "\033[31m●\033[0m working"; rank = 3 }  # red    - busy, leave it
-    else                      { icon = "\033[90m●\033[0m   ?    "; rank = 2 }  # grey   - unrecognised status
+# render <recs> <verify>
+# Tagged streams into one awk: pid->tty+start, tty->pane, and the agents. One `ps`
+# serves both joins, which matters on macOS where each call costs over 100ms.
+#
+# With <verify> set, the recs came from the session files and liveness is on us —
+# ctrl-x kills the pid on the row. A crashed Claude leaves its file behind and the
+# pid may since have been recycled, so a rec counts only while that pid still has
+# the start time the file recorded: `ps lstart` in UTC, or /proc on Linux. A rec
+# missing a field, or not one pid verified, means the format moved on: fail, so
+# the caller falls back to the CLI.
+render() {
+  {
+    # Rejoining the fields with single spaces undoes the padding of a
+    # single-digit day ("Sep  1").
+    TZ=UTC LC_ALL=C ps -o pid=,tty=,lstart= -p "$(printf '%s\n' "$1" | cut -f1 | paste -sd, -)" 2>/dev/null |
+      awk '{ print "P\t" $1 "\t" $2 "\t" $3 " " $4 " " $5 " " $6 " " $7 }'
+    [ -r /proc/self/stat ] && proc_starts "$1"
+    tmux list-panes -a -F $'T\t#{pane_tty}\t#{pane_id}\t#{session_name}\t#{session_name}:#{window_index}.#{pane_index}' 2>/dev/null
+    printf '%s\n' "$1" | sed $'s/^/A\t/'
+  } | awk -F'\t' -v verify="$2" -v now="$(date +%s)" -v home="$HOME" \
+    -v prefix="$(get_tmux_option @claude_session_prefix 'claude-')" '
+    $1 == "P" { tty_of[$2] = $3; start[$2] = $4; next }
+    $1 == "S" { start[$2] = $3; next }
+    $1 == "T" { sub(/^\/dev\//, "", $2); pane[$2] = $3; sess[$2] = $4; loc[$2] = $5; next }
+    $1 == "A" && $2 != "" {
+      if (verify) {
+        if ($3 == "" || $4 == "" || $5 == "" || $7 == "") { bad = 1; exit }
+        gsub(/ +/, " ", $7)
+        if (start[$2] != $7) next             # stale file: dead, or the pid was recycled
+      }
+      live++
 
-    age = (seen_at[$4] != "") ? int((now - seen_at[$4]) / 60) "m" : "-"
-    kind = (index(sess[tty], prefix) == 1) ? "dedicated" : "loose"
+      tty = tty_of[$2]
+      if (tty == "" || !(tty in pane)) next   # this Claude is not running inside tmux
 
-    path = $5
-    if (index(path, home) == 1) path = "~" substr(path, length(home) + 1)
+      if      ($3 == "waiting") { icon = "\033[33m●\033[0m waiting"; rank = 0 }  # yellow - needs input
+      else if ($3 == "idle")    { icon = "\033[32m●\033[0m idle   "; rank = 1 }  # green  - done, your turn
+      else if ($3 == "busy")    { icon = "\033[31m●\033[0m working"; rank = 3 }  # red    - busy, leave it
+      else                      { icon = "\033[90m●\033[0m   ?    "; rank = 2 }  # grey   - unrecognised status
 
-    printf "%s\t%s\t%s\t%s\t%s\t%5s\t%s\t%s\n",
-      rank, pane[tty], $2, kind, icon, age, loc[tty], path
-  }
-' | sort -t$'\t' -k1,1n -k6,6n
-# rank asc (what needs you floats up), then age asc so whatever just went idle
-# sits at the top of its group. -k6,6n reads the leading number of the age field
-# ("5m" -> 5; "-" -> 0).
+      mins = ($6 != "") ? int((now - $6) / 60) : 0
+      if      ($6 == "")    age = "-"
+      else if (mins < 60)   age = mins "m"
+      else if (mins < 2880) age = int(mins / 60) "h"
+      else                  age = int(mins / 1440) "d"
+      kind = (index(sess[tty], prefix) == 1) ? "dedicated" : "loose"
+
+      path = $5
+      if (index(path, home) == 1) path = "~" substr(path, length(home) + 1)
+
+      printf "%s\t%s\t%s\t%s\t%s\t%s\t%5s\t%s\t%s\n",
+        mins, rank, pane[tty], $2, kind, icon, age, loc[tty], path
+    }
+    END { exit (bad || !live) }
+  ' | sort -t$'\t' -k2,2n -k1,1n | cut -f2-
+  # rank asc (what needs you floats up), then age asc so whatever just went idle
+  # sits at the top of its group. The age column mixes units ("5m", "3h", "2d"),
+  # so the sort runs on a leading minutes column, cut off once it has served.
+}
+
+{ recs="$(session_recs)" && out="$(render "$recs" 1)"; } ||
+  { recs="$(cli_recs)" && out="$(render "$recs" '')"; } || exit 0
+[ -n "$out" ] && printf '%s\n' "$out"
+exit 0

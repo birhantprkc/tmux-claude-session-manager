@@ -1,14 +1,12 @@
 #!/usr/bin/env bash
 # Refresh the picker's agent cache whenever this agent changes state.
 #
-#   refresh-cache.sh [delay]   optional seconds to wait first, for the events
-#                              where the supervisor has not caught up yet.
+#   refresh-cache.sh [delay]   optional seconds to wait first, e.g. for the
+#                              process to exit on SessionEnd.
 #
-# picker.sh caches its rows so the popup paints instantly, then re-syncs once
-# open. Without this hook the first paint can be up to the cache TTL out of date,
-# showing "working" for an agent that has been waiting on you for a while.
+# picker.sh paints its first frame from the cache (unless @claude_picker_cache is off).
 # Claude's hooks fire at exactly the moments that status changes, so refreshing
-# here keeps the first paint honest.
+# here keeps that first paint honest.
 #
 # Never fails and never prints: hook output lands in the transcript, and a failed
 # refresh must not fail the turn.
@@ -32,7 +30,7 @@ for candidate in \
 done
 [ -n "${picker:-}" ] || exit 0
 
-# Detached, so the turn never waits on `claude agents --json` (nor on the delay).
+# Detached, so the turn never waits on agents.sh (nor on the delay).
 # Concurrent refreshes from several agents are safe: --list writes a temp file
 # and renames it over the cache, which is atomic.
 delay="${1:-0}"
